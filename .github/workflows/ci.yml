@@ -9,6 +9,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ${{ matrix.os }}
@@ -80,4 +83,4 @@ jobs:
       - name: Parse the published bundles on the engines floor
         run: |
           node --version
-          node --check lib/index.js
+          for f in lib/*.js; do node --check "$f"; done

@@ -85,7 +85,7 @@ jobs:
       # the shipped tarball.
       - name: Scan build output for machine paths
         run: |
-          if grep -rInE --include='*.js' '/home/runner|/Users/[A-Za-z]|/root/|[A-Za-z]:\\\\Users' lib/; then
+          if grep -rInE --include='*.js' '/home/runner|/Users/[A-Za-z]|/root/|[A-Za-z]:[\\\\/]?Users' lib/; then
             echo "::error::machine path leaked into lib/ (matches above)"
             exit 1
           fi
