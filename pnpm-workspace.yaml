@@ -1,0 +1,6 @@
+# pnpm 11 reads all workspace/package settings from this file.
+# Build-script approvals: esbuild validates its binary, koffi prepares its
+# native binding. Everything else stays un-built by default.
+allowBuilds:
+  esbuild: true
+  koffi: true

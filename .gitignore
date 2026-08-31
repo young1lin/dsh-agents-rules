@@ -1,0 +1,12 @@
+node_modules/
+lib/
+.verify-home/
+.tmp/
+coverage/
+*.tsbuildinfo
+*.log
+*.tgz
+.env
+.env.*
+.npm-cache/
+.pnpm-store/

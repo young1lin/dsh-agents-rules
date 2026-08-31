@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        # pnpm 11 (packageManager) requires Node >= 22.13 for its own runtime;
+        # the built package still targets Node >= 20 (see engines in package.json).
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Test
+        run: pnpm exec vitest run
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Smoke tests (self-contained, real fs)
+        run: |
+          node tests/user-paths.smoke.mjs
+          node tests/scope.smoke.mjs
+          node tests/real-fs.smoke.mjs
+          node tests/symlink.smoke.mjs
+
+      - name: Pack (tarball manifest check)
+        run: pnpm pack --dry-run
+
+  # engines.node is ">=20", but pnpm 11 (packageManager) needs >= 22.13 for its
+  # own runtime, so the matrix above cannot RUN on the floor. The floor is a
+  # syntax claim — tsc targets es2023 precisely so 20.x can parse the output —
+  # and this job is what verifies it instead of trusting the target.
+  engines-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Parse the published bundles on the engines floor
+        run: |
+          node --version
+          node --check lib/index.js
