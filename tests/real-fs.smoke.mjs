@@ -22,11 +22,16 @@ writeFileSync(join(WS, '.agents', 'rules', 'proj-testing.md'), 'Run pnpm test be
 
 const ctx = new Context()
 new LocalFileSystem(ctx, { cwd: process.cwd(), diffBasisMaxBytes: 10 * 1024 * 1024 })
-await ctx.plugin(agentsRules, { mode: 'context', agentsHome: join(HOME, '.agents'), maxBytes: 65536 })
+await ctx.plugin(agentsRules, { mode: 'context', agentsHome: join(HOME, '.agents'), claudeCompat: false, maxBytes: 65536 })
 
 let seq = 0
 const makeAgent = (events = []) => ({
-  session: { header: { cwd: WS }, events, surface: { nodes: new Set(events.map(e => e.seq)) } },
+  session: {
+    header: { cwd: WS },
+    events,
+    snapshotEvents: () => events,  // dsh 0.1.7 exposes the log via this accessor
+    surface: { nodes: new Set(events.map(e => e.seq)) },
+  },
 })
 const preStep = async (agent, messages = []) => await ctx.waterfall(
   scopeTarget(agent, agent), 'agent/pre-step',

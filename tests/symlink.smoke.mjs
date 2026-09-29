@@ -41,9 +41,9 @@ try {
 }
 
 const ctx = new Context()
-await ctx.plugin(SystemPrompt, { persona: 'P.' })
+await ctx.plugin(SystemPrompt, { personaPrefix: 'P.' })
 new LocalFileSystem(ctx, { cwd: process.cwd(), diffBasisMaxBytes: 10 * 1024 * 1024 })
-await ctx.plugin(agentsRules, { mode: 'system-prompt', agentsHome, maxBytes: 65536 })
+await ctx.plugin(agentsRules, { mode: 'system-prompt', agentsHome, claudeCompat: false, maxBytes: 65536 })
 
 const prompt = renderPrompt(await ctx.systemPrompt.assemble({ agent: { session: { header: { cwd: PROJ } } } }))
 const has = (s) => prompt.includes(s)
@@ -52,9 +52,15 @@ console.log('rule A (linked root, file 1):', has('Rule A: avoid implicit transac
 console.log('rule B (linked root, file 2):', has('Rule B: serialize snowflake ids as strings.'))
 console.log('rule C (nested subdir):', has('Rule C: nested rule.'))
 const ruleCCount = (prompt.match(/Rule C/g) || []).length
-console.log('symlinked file child loaded:', ruleCCount >= (aliasOk ? 2 : 1))
+// the symlinked file alias carries identical content: content-level dedup
+// collapses it to one element and records the skipped copy in a note
+// (alias.md sorts before nested/, so it is the kept canonical copy)
+const deduped = !aliasOk || (ruleCCount === 1
+  && has('Rule files skipped as exact duplicates of an earlier rule file')
+  && has('.agents/rules/nested/nested.md (= .agents/rules/alias.md)'))
+console.log('symlinked file alias deduped:', deduped)
 const pass = has('The following agent rules') && has('Rule A: avoid implicit transaction traps.')
   && has('Rule B: serialize snowflake ids as strings.') && has('Rule C: nested rule.')
-  && ruleCCount >= (aliasOk ? 2 : 1)
+  && ruleCCount === 1 && deduped
 console.log(pass ? 'SYMLINK TEST: PASS' : 'SYMLINK TEST: FAIL')
 process.exit(pass ? 0 : 1)

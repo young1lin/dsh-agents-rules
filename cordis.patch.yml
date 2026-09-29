@@ -7,6 +7,10 @@
         # Delivery mode: durable user-role context message (visible in the
         # conversation like the skill catalog), or a system-prompt section.
         mode: context
+        # Claude Code compatibility: also load ~/.claude/rules and
+        # <projectRoot>/.claude/rules, deduplicated by content against the
+        # .agents convention. claudeCompat: false disables; claudeHome
+        # relocates the global directory (default ~/.claude).
         # Total byte budget for the complete rendered rules snapshot. Each
         # deployment makes its prompt-budget choice explicitly here.
         maxBytes: 65536

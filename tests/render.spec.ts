@@ -66,4 +66,44 @@ describe('renderRulesSection', () => {
     expect(text).toContain('Rule files skipped for exceeding the per-file size cap: ~/.agents/rules/huge.md')
     expect(text).toContain('OK body.')
   })
+
+  it('renders identical content once and records the skipped duplicate', () => {
+    const text = renderRulesSection(
+      [
+        rule('global', 'style.md', 'Shared body.'),
+        { origin: 'global', relPath: 'style.md', displayPath: '~/.claude/rules/style.md', content: 'Shared body.' },
+      ],
+      65536,
+      [],
+    )
+    expect(text.match(/Shared body\./g)?.length).toBe(1)
+    expect(text).toContain('path="~/.agents/rules/style.md"')
+    expect(text).toContain('Rule files skipped as exact duplicates of an earlier rule file: ~/.claude/rules/style.md (= ~/.agents/rules/style.md)')
+  })
+
+  it('dedupes on the prepared body, ignoring differing frontmatter', () => {
+    const text = renderRulesSection(
+      [
+        rule('global', 'a.md', 'Shared body.'),
+        { origin: 'project', relPath: 'b.md', displayPath: '.claude/rules/b.md', content: '---' + NL + 'x: 1' + NL + '---' + NL + 'Shared body.' },
+      ],
+      65536,
+      [],
+    )
+    expect(text.match(/Shared body\./g)?.length).toBe(1)
+  })
+
+  it('keeps both copies when the same path holds different content', () => {
+    const text = renderRulesSection(
+      [
+        rule('global', 'style.md', 'Canonical body.'),
+        { origin: 'global', relPath: 'style.md', displayPath: '~/.claude/rules/style.md', content: 'Compat body.' },
+      ],
+      65536,
+      [],
+    )
+    expect(text).toContain('Canonical body.')
+    expect(text).toContain('Compat body.')
+    expect(text).not.toContain('exact duplicates')
+  })
 })

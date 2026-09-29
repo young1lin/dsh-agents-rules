@@ -79,9 +79,11 @@ function compose(rules: readonly SelectedRule[], notes: readonly string[], withI
  * Render the complete rules section with the standing intro line.
  *
  * Every discovered file injects verbatim after stripping a leading frontmatter
- * block. The total byte budget applies to the complete section: whole files
- * drop from the broad (global) end while dropping reduces the size, then the
- * remainder truncates with a visible marker.
+ * block; files whose prepared content is identical to an earlier file's render
+ * once, with the skipped copy listed in a closing note. The total byte budget
+ * applies to the complete section: whole files drop from the broad (global)
+ * end while dropping reduces the size, then the remainder truncates with a
+ * visible marker.
  *
  * @param files - discovered files, broadest-first (global roots before project).
  * @param maxBytes - total byte budget for the complete section.
@@ -98,7 +100,8 @@ export function renderRulesSection(
 
 /**
  * The same snapshot without the standing intro line, for context-mode frames
- * that carry their own opening sentence.
+ * that carry their own opening sentence. Content-level deduplication applies
+ * exactly as in renderRulesSection.
  *
  * @param files - discovered files, broadest-first (global roots before project).
  * @param maxBytes - total byte budget for the complete body.
@@ -120,16 +123,32 @@ function renderSnapshot(
   oversized: readonly string[],
   withIntro: boolean,
 ): string {
+  // Content-level dedup: rule sets mirrored across conventions (or scopes)
+  // would inject the same prose twice. The first occurrence wins — roots are
+  // broad-to-specific with the canonical .agents convention ahead of the
+  // .claude compat root — and every skipped copy is recorded below.
   const selected: SelectedRule[] = []
+  const duplicates: string[] = []
+  const keptPathByContent = new Map<string, string>()
   for (const file of files) {
     const content = stripFrontmatterBlock(file.content).trim()
-    if (content.length > 0) selected.push({ file, content })
+    if (content.length === 0) continue
+    const keptPath = keptPathByContent.get(content)
+    if (keptPath !== undefined) {
+      duplicates.push(file.displayPath + ' (= ' + keptPath + ')')
+      continue
+    }
+    keptPathByContent.set(content, file.displayPath)
+    selected.push({ file, content })
   }
   if (selected.length === 0 && oversized.length === 0) return ''
 
   const fixedNotes: string[] = []
   if (oversized.length > 0) {
     fixedNotes.push('Rule files skipped for exceeding the per-file size cap: ' + oversized.join('; '))
+  }
+  if (duplicates.length > 0) {
+    fixedNotes.push('Rule files skipped as exact duplicates of an earlier rule file: ' + duplicates.join('; '))
   }
 
   const NLNL = String.fromCharCode(10, 10)

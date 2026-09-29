@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-一个面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 AGENTS 规则适配插件（bundle）。它加载厂商中立的 `.agents/rules` 约定下的规则文件——项目级（`<projectRoot>/.agents/rules`）与全局（`~/.agents/rules`）——并作为一个系统提示词段落注入。
+一个面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 AGENTS 规则适配插件（bundle）。它加载厂商中立的 `.agents/rules` 约定下的规则文件——项目级（`<projectRoot>/.agents/rules`）与全局（`~/.agents/rules`）——并出于 Claude Code 兼容目的同时加载两级 `.claude/rules`，两种约定内容相同时去重。全部内容作为一个系统提示词段落注入。
 
 ## 为什么是这个形态
 
@@ -17,10 +17,14 @@
 ## 加载哪些内容
 
 - **全局规则**：`<agentsHome>/rules`（默认 `~/.agents/rules`）下所有 `*.md` 文件，递归发现，按名称稳定排序。
+- **全局兼容规则**（`claudeCompat: true`，默认开启）：`<claudeHome>/rules`（默认 `~/.claude/rules`）下所有 `*.md` 文件。
 - **项目规则**：`<projectRoot>/.agents/rules` 下所有 `*.md` 文件；项目根是从会话 cwd 向上找到的第一个包含项目根标记（默认 `.git`；会话 cwd 本身是兜底）的祖先目录。一路到文件系统根都没有标记时，项目规则不加载。
-- 全局规则先于项目规则渲染（由宽到窄）。
+- **项目兼容规则**：`<projectRoot>/.claude/rules` 下所有 `*.md` 文件。
+- 根由宽到窄、规范约定在前地渲染：全局 `.agents` → 全局 `.claude` → 项目 `.agents` → 项目 `.claude`。
 
-`.agents/rules` 约定没有文档化的 frontmatter 字段语义，因此不解释任何字段：每个文件在剥离开头的 YAML frontmatter 元数据块后按原文注入，只保留正文。
+**去重**：准备后内容（剥掉 frontmatter、trim）与更早文件完全相同的文件只渲染一次——先出现者胜，因此 `.agents` 里的副本优先于它的 `.claude` 镜像，全局副本优先于恰好相同的项目副本。去重按内容而非文件名：相对路径相同但正文不同的两个文件都会保留。被跳过的副本记录在结尾说明里（`Rule files skipped as exact duplicates of an earlier rule file: <路径> (= <保留路径>)`），且去重发生在字节预算之前，重复内容永不占用预算。
+
+`.agents/rules` 约定没有文档化的 frontmatter 字段语义，`.claude/rules` 的 frontmatter 本插件同样不解释：每个文件在剥离开头的 YAML frontmatter 元数据块后按原文注入，只保留正文。
 
 ## 渲染形态
 
@@ -42,11 +46,11 @@ The following agent rules were loaded once at session start and are frozen for t
 </system-reminder>
 ```
 
-每个文件用 XML 风格元素包裹（与技能目录的约定一致），而不是 markdown 标题：规则文件自带 `#`/`##` 标题，如果框架也用标题，层级会和内容打架（文件名反而嵌在内容标题之下）。全局规则先于项目规则（由宽到窄）。内容里字面出现的 `</rule>` 或框架闭合标签会被转义。
+每个文件用 XML 风格元素包裹（与技能目录的约定一致），而不是 markdown 标题：规则文件自带 `#`/`##` 标题，如果框架也用标题，层级会和内容打架（文件名反而嵌在内容标题之下）。全局规则先于项目规则，同一层级内 `.agents` 先于 `.claude`（由宽到窄）。内容里字面出现的 `</rule>` 或框架闭合标签会被转义。
 
 ## 与 dsh-agent-instructions 的关系
 
-DSH 自带的 `@deepseek-ai/dsh-agent-instructions` 加载 `AGENTS.md`/`CLAUDE.md` 指令文件（用户级 `$DSH_HOME/AGENTS.md` 加项目目录链，含嵌套发现与变更追踪）。本插件覆盖该机制不解释的 `rules` 目录这一互补面，并且刻意不做其他任何事：不加载 `CLAUDE.md`、不碰 `.claude/` 路径、不处理 `@path` 导入。
+DSH 自带的 `@deepseek-ai/dsh-agent-instructions` 加载 `AGENTS.md`/`CLAUDE.md` 指令文件（用户级 `$DSH_HOME/AGENTS.md` 加项目目录链，含嵌套发现与变更追踪）。本插件覆盖该机制不解释的 `rules` 目录这一互补面——两种约定的 `rules` 目录都算——并且刻意不做其他任何事：不加载 `CLAUDE.md`、不碰 `.claude/rules` 之外的 `.claude/` 路径、不处理 `@path` 导入。
 
 ## 安装
 
@@ -134,6 +138,8 @@ bundle patch 插入一行（`id: agents-rules`）；在 profile 的 `cordis.patc
 - id: agents-rules
   config:
     agentsHome: ~/.agents
+    claudeCompat: true
+    claudeHome: ~/.claude
     projectRootMarkers: ['.git']
     maxBytes: 65536
     maxFileBytes: 262144
@@ -143,11 +149,13 @@ bundle patch 插入一行（`id: agents-rules`）；在 profile 的 `cordis.patc
 |---|---|---|
 | `mode` | `context` | `context` = 持久 user-role 消息（对话可见）；`system-prompt` = persona 后的一个提示词段落。 |
 | `agentsHome` | `~/.agents` | 全局规则所在主目录；规则来自 `<agentsHome>/rules`。前导 `~` 按 OS 主目录展开。 |
+| `claudeCompat` | `true` | 同时加载 `<claudeHome>/rules`（全局）与 `<projectRoot>/.claude/rules`（项目），按内容对 `.agents` 约定去重。 |
+| `claudeHome` | `~/.claude` | 全局 Claude 兼容规则所在主目录；规则来自 `<claudeHome>/rules`。校验方式同 `agentsHome`。 |
 | `projectRootMarkers` | `['.git']` | 从会话 cwd 向上识别项目根的同目录标记文件名。 |
 | `maxBytes` | 必填 | 完整渲染段落的总字节预算。非正数关闭注入。 |
 | `maxFileBytes` | `262144` | 单文件字节上限；超限的规则文件跳过并列入说明。 |
 
-预算行为：先从宽（全局）端整文件丢弃，每次丢弃都记录在结尾说明；若单文件仍超出，则带可见标记截断。配置错误（`maxBytes` 非有限数、`agentsHome` 相对路径、标记名含分隔符）在插件加载时立刻报错。
+预算行为：完全重复的内容最先丢弃（永不占用预算），然后从宽（全局）端整文件丢弃，每次丢弃都记录在结尾说明；若单文件仍超出，则带可见标记截断。配置错误（`maxBytes` 非有限数、`agentsHome`/`claudeHome` 相对路径、`claudeCompat` 非布尔、标记名含分隔符）在插件加载时立刻报错。
 
 ## 降级行为
 
@@ -159,7 +167,7 @@ bundle patch 插入一行（`id: agents-rules`）；在 profile 的 `cordis.patc
 
 ### 模型看到什么
 
-persona 之后的一个系统提示词段落，内容为该会话第一次装配时的冻结快照。
+deployment persona prefix（`deployment:persona-prefix`）之后的一个系统提示词段落，内容为该会话第一次装配时的冻结快照。
 
 #### Token 影响
 
@@ -172,7 +180,8 @@ persona 之后的一个系统提示词段落，内容为该会话第一次装配
 ## 已知限制
 
 - 快照与会话冻结是设计行为；没有刷新命令。要加载编辑过的规则，请新开会话（或 fork）。
-- 没有按文件的条件加载：约定没有定义适用性语义，因此发现的每个文件都无条件注入。
+- 没有按文件的条件加载：约定没有本插件会解释的适用性语义，发现的每个文件都无条件注入。特别是 Claude Code `.claude/rules` frontmatter 的条件字段（`paths`、`always` 等）不做求值——这类文件始终注入，frontmatter 与其他文件一样被剥掉。
+- 去重按准备后的正文精确匹配：同一文件带空白级差异的镜像（或反之）仍会渲染两次。
 - 冻结快照是按活跃 agent 键控的进程内存，不持久化到会话日志（按 DSH 架构，系统提示词在装配时重建）。
 
 ## 开发
@@ -180,7 +189,7 @@ persona 之后的一个系统提示词段落，内容为该会话第一次装配
 ```sh
 pnpm install
 pnpm run build   # tsc -> lib/
-pnpm test        # vitest
+pnpm test        # vitest（单元测试 + 基于内存文件系统的环境无关集成测试）
 # 自包含冒烟测试（fixture 在系统临时目录；构建后运行）
 node tests/user-paths.smoke.mjs
 node tests/scope.smoke.mjs

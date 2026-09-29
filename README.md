@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-An AGENTS rules adapter plugin (bundle) for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It loads rule files from the vendor-neutral `.agents/rules` convention — project (`<projectRoot>/.agents/rules`) and global (`~/.agents/rules`) — and injects them into the system prompt as one section.
+An AGENTS rules adapter plugin (bundle) for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). It loads rule files from the vendor-neutral `.agents/rules` convention — project (`<projectRoot>/.agents/rules`) and global (`~/.agents/rules`) — and, for Claude Code compatibility, also from `.claude/rules` at both scopes, deduplicating identical content across the two conventions. Everything injects into the system prompt as one section.
 
 ## Why this shape
 
@@ -17,10 +17,14 @@ Two delivery modes (`mode` config): `context` (default) publishes one durable us
 ## What is loaded
 
 - **Global rules**: every `*.md` file under `<agentsHome>/rules` (default `~/.agents/rules`), discovered recursively in stable name order.
+- **Global compat rules** (`claudeCompat: true`, the default): every `*.md` file under `<claudeHome>/rules` (default `~/.claude/rules`).
 - **Project rules**: every `*.md` file under `<projectRoot>/.agents/rules`, where the project root is the nearest ancestor of the session cwd containing a project-root marker (default `.git`; the session cwd itself is the fallback). When no marker exists up to the filesystem root, project rules simply do not load.
-- Global rules render before project rules (broad to specific).
+- **Project compat rules**: every `*.md` file under `<projectRoot>/.claude/rules`.
+- Roots render broad to specific, canonical convention first: global `.agents` → global `.claude` → project `.agents` → project `.claude`.
 
-The `.agents/rules` convention has no documented frontmatter field semantics, so no field is interpreted: every file injects verbatim after stripping a leading YAML frontmatter block (machine metadata), keeping only its prose body.
+**Deduplication**: files whose prepared content (frontmatter stripped, trimmed) is byte-identical to an earlier file's render exactly once — the first occurrence wins, so a `.agents` copy beats its `.claude` mirror, and a global copy beats a project copy it happens to duplicate. This is content-based, not name-based: two files at the same relative path with diverged bodies both stay. Skipped copies are listed in the closing notes (`Rule files skipped as exact duplicates of an earlier rule file: <path> (= <kept path>)`), and dedup runs before the byte budget so duplicates never consume it.
+
+Neither the `.agents/rules` convention nor (for this adapter) the `.claude/rules` frontmatter defines interpretable field semantics here, so no field is interpreted: every file injects verbatim after stripping a leading YAML frontmatter block (machine metadata), keeping only its prose body.
 
 ## Rendered shape
 
@@ -42,13 +46,13 @@ The following agent rules were loaded once at session start and are frozen for t
 </system-reminder>
 ```
 
-Per-file framing is an XML-style element (matching the skill-catalog convention) rather than markdown headings: rule files carry their own `#`/`##` headings, and a heading-based frame would invert the hierarchy against them. Global rules precede project rules (broad to specific). Content that literally contains `</rule>` or a frame-closing tag is escaped.
+Per-file framing is an XML-style element (matching the skill-catalog convention) rather than markdown headings: rule files carry their own `#`/`##` headings, and a heading-based frame would invert the hierarchy against them. Global rules precede project rules, and within one scope `.agents` precedes `.claude` (broad to specific). Content that literally contains `</rule>` or a frame-closing tag is escaped.
 
-The section is inserted right after the deployment persona section (`deployment:persona`), so it precedes tool guidance.
+The section is inserted right after the deployment persona prefix (`deployment:persona-prefix`), so it precedes tool guidance.
 
 ## Relationship to dsh-agent-instructions
 
-DSH's own `@deepseek-ai/dsh-agent-instructions` loads `AGENTS.md`/`CLAUDE.md` instruction files (user-global `$DSH_HOME/AGENTS.md` plus the project directory chain, with nested discovery and change tracking). This plugin covers the complementary `rules` directories that mechanism does not interpret, and deliberately loads nothing else: no `CLAUDE.md`, no `.claude/` paths, no `@path` imports.
+DSH's own `@deepseek-ai/dsh-agent-instructions` loads `AGENTS.md`/`CLAUDE.md` instruction files (user-global `$DSH_HOME/AGENTS.md` plus the project directory chain, with nested discovery and change tracking). This plugin covers the complementary `rules` directories that mechanism does not interpret — both conventions' `rules` folders — and deliberately loads nothing else: no `CLAUDE.md`, no `.claude/` paths other than `.claude/rules`, no `@path` imports.
 
 ## Install
 
@@ -136,6 +140,8 @@ The bundle patch inserts one row (`id: agents-rules`); override it from your pro
 - id: agents-rules
   config:
     agentsHome: ~/.agents
+    claudeCompat: true
+    claudeHome: ~/.claude
     projectRootMarkers: ['.git']
     maxBytes: 65536
     maxFileBytes: 262144
@@ -145,11 +151,13 @@ The bundle patch inserts one row (`id: agents-rules`); override it from your pro
 |---|---|---|
 | `mode` | `context` | `context` = durable user-role message (conversation-visible); `system-prompt` = one prompt section after the persona. |
 | `agentsHome` | `~/.agents` | Home holding the global rules; they load from `<agentsHome>/rules`. A leading `~` expands against the OS home. |
+| `claudeCompat` | `true` | Also load `<claudeHome>/rules` (global) and `<projectRoot>/.claude/rules` (project), deduplicated by content against the `.agents` convention. |
+| `claudeHome` | `~/.claude` | Home holding the global Claude compat rules; they load from `<claudeHome>/rules`. Validated like `agentsHome`. |
 | `projectRootMarkers` | `['.git']` | Bare file names that identify the project root when walking up from the session cwd. |
 | `maxBytes` | required | Total byte budget for the complete rendered section. Non-positive disables injection. |
 | `maxFileBytes` | `262144` | Per-file byte cap; an oversized rule file is skipped and listed in the notes. |
 
-Budget behavior: whole files drop from the broad (global) end first, each drop recorded in the closing notes; if a single file still overflows, it truncates with a visible marker. Misconfiguration (non-finite `maxBytes`, relative `agentsHome`, marker names containing separators) fails loud at plugin load.
+Budget behavior: exact duplicates drop first (never consuming budget), then whole files drop from the broad (global) end, each drop recorded in the closing notes; if a single file still overflows, it truncates with a visible marker. Misconfiguration (non-finite `maxBytes`, relative `agentsHome`/`claudeHome`, non-boolean `claudeCompat`, marker names containing separators) fails loud at plugin load.
 
 ## Degradation
 
@@ -174,7 +182,8 @@ Prefix-stable within a session: the section text never changes between assemblie
 ## Known Limitations
 
 - The snapshot is frozen per session by design; there is no refresh command. Start a new session (or fork) to pick up edited rules.
-- No per-file conditional loading: the convention defines no applicability semantics, so every discovered file injects unconditionally.
+- No per-file conditional loading: the conventions define no applicability semantics this adapter interprets, so every discovered file injects unconditionally. In particular, Claude Code's `.claude/rules` frontmatter condition fields (`paths`, `always`, ...) are not evaluated — such a file always injects, with its frontmatter stripped like any other.
+- Deduplication matches the prepared body exactly: same file mirrored with whitespace-level edits (or vice versa) still renders twice.
 - The frozen snapshot is process-local memory keyed by the live agent; it is not persisted in the session log (the system prompt is reconstructed at assembly, per DSH's architecture).
 
 ## Development
@@ -182,7 +191,7 @@ Prefix-stable within a session: the section text never changes between assemblie
 ```sh
 pnpm install
 pnpm run build   # tsc -> lib/
-pnpm test        # vitest
+pnpm test        # vitest (unit + environment-independent integration on the in-memory fs)
 # self-contained smoke tests (fixtures under the OS temp dir; after build)
 node tests/user-paths.smoke.mjs
 node tests/scope.smoke.mjs

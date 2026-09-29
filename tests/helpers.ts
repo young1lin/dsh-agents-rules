@@ -156,11 +156,15 @@ export class MemoryFs extends FileSystem {
 
 /** A minimal structural agent whose session cwd scopes project rules. */
 export function makeAgent(cwd: string, options?: { parentSession?: string; events?: unknown[] }): Agent {
+  const events: unknown[] = options?.events ?? []
   return {
     session: {
       header: { cwd: resolvePath(cwd), ...options?.parentSession !== undefined ? { parentSession: options.parentSession } : {} },
-      events: options?.events ?? [],
-      surface: { nodes: new Set<number>((options?.events ?? []).map((e, i) => (e as { seq?: number }).seq ?? i + 1)) },
+      // dsh 0.1.7 reads the log through the frozen accessor; tests keep the
+      // raw array alongside so commit() can keep appending like the loop does.
+      events,
+      snapshotEvents: () => events,
+      surface: { nodes: new Set<number>(events.map((e, i) => (e as { seq?: number }).seq ?? i + 1)) },
     },
   } as unknown as Agent
 }
@@ -170,19 +174,23 @@ export interface TreeOptions {
   readonly agentsHome: string
   readonly maxBytes: number
   readonly maxFileBytes?: number
+  readonly claudeCompat?: boolean
+  readonly claudeHome?: string
   readonly withFs?: boolean
 }
 
 /** Boot a minimal real cordis tree: system-prompt service, optional MemoryFs, and the adapter. */
 export async function makeTree(options: TreeOptions): Promise<{ ctx: Context; fs: MemoryFs }> {
   const ctx = new Context()
-  await ctx.plugin(SystemPrompt, { persona: 'You are a test persona.' })
+  await ctx.plugin(SystemPrompt, { personaPrefix: 'You are a test persona.' })
   const fs = options.withFs === false ? new MemoryFs(new Context()) : new MemoryFs(ctx)
   await ctx.plugin(ccRules, {
     mode: options.mode ?? 'system-prompt',
     agentsHome: options.agentsHome,
     maxBytes: options.maxBytes,
     ...options.maxFileBytes !== undefined ? { maxFileBytes: options.maxFileBytes } : {},
+    ...options.claudeCompat !== undefined ? { claudeCompat: options.claudeCompat } : {},
+    ...options.claudeHome !== undefined ? { claudeHome: options.claudeHome } : {},
   })
   return { ctx, fs }
 }

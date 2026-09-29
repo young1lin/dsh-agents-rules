@@ -11,6 +11,9 @@ import type { Config, ResolvedConfig } from './types.ts'
 /** Default agents home (the tilde expands at resolve time). */
 export const DEFAULT_AGENTS_HOME = '~/.agents'
 
+/** Default Claude home for compat loading (the tilde expands at resolve time). */
+export const DEFAULT_CLAUDE_HOME = '~/.claude'
+
 /** Default project-root markers. */
 export const DEFAULT_PROJECT_ROOT_MARKERS: readonly string[] = ['.git']
 
@@ -59,8 +62,9 @@ function tildeForDisplay(absolute: string): string {
  * @param config - the raw cordis row config.
  * @returns the frozen resolved config.
  * @throws when maxBytes is not a finite number, maxFileBytes is not a positive
- *   integer, agentsHome does not expand to an absolute path, or a project-root
- *   marker is not a bare file name.
+ *   integer, agentsHome or claudeHome does not expand to an absolute path,
+ *   claudeCompat is not a boolean, or a project-root marker is not a bare file
+ *   name.
  */
 export function resolveConfig(config: Config): ResolvedConfig {
   if (typeof config.maxBytes !== 'number' || !Number.isFinite(config.maxBytes)) {
@@ -76,6 +80,15 @@ export function resolveConfig(config: Config): ResolvedConfig {
       'agents-rules: config.agentsHome must expand to an absolute path (got ' + JSON.stringify(config.agentsHome) + ')',
     )
   }
+  const claudeHome = expandHome(config.claudeHome ?? DEFAULT_CLAUDE_HOME)
+  if (claudeHome.length === 0 || !isAbsolute(claudeHome)) {
+    throw new Error(
+      'agents-rules: config.claudeHome must expand to an absolute path (got ' + JSON.stringify(config.claudeHome) + ')',
+    )
+  }
+  if (config.claudeCompat !== undefined && typeof config.claudeCompat !== 'boolean') {
+    throw new Error('agents-rules: config.claudeCompat must be a boolean')
+  }
   const markers = config.projectRootMarkers ?? DEFAULT_PROJECT_ROOT_MARKERS
   for (const marker of markers) {
     if (marker.length === 0 || marker === '.' || marker === '..' || marker.includes(SLASH) || marker.includes(BACKSLASH)) {
@@ -87,6 +100,9 @@ export function resolveConfig(config: Config): ResolvedConfig {
   return Object.freeze({
     agentsHome,
     agentsHomeDisplay: tildeForDisplay(agentsHome),
+    claudeCompat: config.claudeCompat ?? true,
+    claudeHome,
+    claudeHomeDisplay: tildeForDisplay(claudeHome),
     projectRootMarkers: markers,
     maxBytes: config.maxBytes,
     maxFileBytes,

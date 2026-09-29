@@ -22,9 +22,9 @@ if (planted) {
 }
 
 const ctx = new Context()
-await ctx.plugin(SystemPrompt, { persona: 'P.' })
+await ctx.plugin(SystemPrompt, { personaPrefix: 'P.' })
 new LocalFileSystem(ctx, { cwd: process.cwd(), diffBasisMaxBytes: 10 * 1024 * 1024 })
-await ctx.plugin(rules, { mode: 'system-prompt', maxBytes: 65536 })
+await ctx.plugin(rules, { mode: 'system-prompt', claudeCompat: false, maxBytes: 65536 })
 
 const agent = { id: 'scope-test', session: { header: { cwd: PROJ } } }
 

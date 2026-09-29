@@ -18,6 +18,18 @@ export interface Config {
    */
   agentsHome?: string
   /**
+   * Claude Code compatibility: also load rule files from ~/.claude/rules
+   * (global) and <projectRoot>/.claude/rules (project) alongside the .agents
+   * convention, deduplicated by content. Default true.
+   */
+  claudeCompat?: boolean
+  /**
+   * Home directory holding the global Claude rules (<claudeHome>/rules); a
+   * leading tilde expands against the OS home. Default '~/.claude'. Only read
+   * when claudeCompat is true.
+   */
+  claudeHome?: string
+  /**
    * Same-directory marker names that identify the project root when walking up
    * from the session cwd. Default ['.git']. Entries must be bare file names.
    */
@@ -41,6 +53,12 @@ export interface ResolvedConfig {
   readonly agentsHome: string
   /** Model-visible form of agentsHome ('~'-collapsed when under the OS home). */
   readonly agentsHomeDisplay: string
+  /** Whether the Claude Code .claude/rules convention also loads. */
+  readonly claudeCompat: boolean
+  /** Absolute tilde-expanded Claude home. */
+  readonly claudeHome: string
+  /** Model-visible form of claudeHome ('~'-collapsed when under the OS home). */
+  readonly claudeHomeDisplay: string
   /** Validated project-root marker names. */
   readonly projectRootMarkers: readonly string[]
   /** Total section byte budget; non-positive disables injection. */

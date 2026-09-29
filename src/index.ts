@@ -1,7 +1,9 @@
 /**
- * AGENTS rules adapter for DeepSeek Harness: global (~/.agents/rules) and
- * project (.agents/rules) rule directories delivered to the model once per
- * session, snapshotted at that session's first step.
+ * AGENTS rules adapter for DeepSeek Harness: global (~/.agents/rules,
+ * compat ~/.claude/rules) and project (.agents/rules, compat .claude/rules)
+ * rule directories delivered to the model once per session, snapshotted at
+ * that session's first step. Files whose prepared content is identical across
+ * conventions (or scopes) render exactly once.
  *
  * Two delivery modes. `context` (default) publishes a durable user-role
  * message framed like the skill catalog — visible in the conversation,
@@ -15,7 +17,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { PERSONA_SECTION } from '@deepseek-ai/dsh-system-prompt'
+import { PERSONA_PREFIX_SECTION } from '@deepseek-ai/dsh-system-prompt'
 import type { AssembledSection, AssembleContext, PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import z from '@deepseek-ai/schemastery'
@@ -45,21 +47,28 @@ export const RULES_SECTION = 'agents-rules:rules'
 /** Re-exported for context-mode consumers that render the section intro. */
 export const CONTEXT_INTRO = SECTION_INTRO
 
-/** Fixed project rules directory name inside the project root. */
+/** Fixed project rules directory names inside the project root. */
 const PROJECT_RULES_SEGMENTS = ['.agents', 'rules']
+
+/** Fixed compat project rules directory names inside the project root. */
+const PROJECT_CLAUDE_RULES_SEGMENTS = ['.claude', 'rules']
 
 /** Plugin config schema; maxBytes is required so deployments choose a budget explicitly. */
 export const Config: z<ConfigShape> = z.object({
   mode: z.union(['context', 'system-prompt']).default('context'),
   agentsHome: z.string().default('~/.agents'),
+  claudeCompat: z.boolean().default(true),
+  claudeHome: z.string().default('~/.claude'),
   projectRootMarkers: z.array(z.string()).default(['.git']),
   maxBytes: z.number().required(),
   maxFileBytes: z.number().default(262144),
 })
 
 /**
- * Insert the rules section right after the deployment persona (or append when
- * no persona section is present), leaving every other section untouched.
+ * Insert the rules section right after the deployment persona prefix (or
+ * append when no persona prefix section is present), leaving every other
+ * section untouched — the persona suffix is an end-of-prompt slot that must
+ * stay last.
  * @param assembly - the authoritative assembly returned by the waterfall.
  * @param text - the complete rendered rules section.
  * @returns a copy of the assembly with the rules section inserted.
@@ -67,7 +76,7 @@ export const Config: z<ConfigShape> = z.object({
 function spliceSection(assembly: PromptAssembly, text: string): PromptAssembly {
   const section: AssembledSection = { name: RULES_SECTION, text }
   const sections = [...assembly.sections]
-  const personaIndex = sections.findIndex(entry => entry.name === PERSONA_SECTION)
+  const personaIndex = sections.findIndex(entry => entry.name === PERSONA_PREFIX_SECTION)
   if (personaIndex >= 0) sections.splice(personaIndex + 1, 0, section)
   else sections.push(section)
   return { ...assembly, sections }
@@ -102,8 +111,14 @@ async function snapshotSection(
   const globalDisplayRoot = resolved.agentsHomeDisplay + '/rules'
   const roots: RulesRoot[] = [
     { origin: 'global', dir: join(resolved.agentsHome, 'rules'), displayRoot: globalDisplayRoot },
-    { origin: 'project', dir: join(projectRoot, ...PROJECT_RULES_SEGMENTS), displayRoot: '.agents/rules' },
   ]
+  if (resolved.claudeCompat) {
+    roots.push({ origin: 'global', dir: join(resolved.claudeHome, 'rules'), displayRoot: resolved.claudeHomeDisplay + '/rules' })
+  }
+  roots.push({ origin: 'project', dir: join(projectRoot, ...PROJECT_RULES_SEGMENTS), displayRoot: '.agents/rules' })
+  if (resolved.claudeCompat) {
+    roots.push({ origin: 'project', dir: join(projectRoot, ...PROJECT_CLAUDE_RULES_SEGMENTS), displayRoot: '.claude/rules' })
+  }
   const { files, oversized } = await collectRules(fileSystem, roots, resolved.maxFileBytes, signal, (message, error) => {
     ctx.logger.warn(message + ': %o', error)
   })

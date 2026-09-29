@@ -127,7 +127,9 @@ function readDigest(source: unknown): string | undefined {
  */
 export function rulesHistory(agent: Agent): RulesHistory {
   const visible = new Set(agent.session.surface.nodes)
-  const events = agent.session.events
+  // dsh 0.1.5 made the event log private; snapshotEvents() is the frozen
+  // full-log accessor (seq = array index, same contiguity as the old field).
+  const events = agent.session.snapshotEvents()
   let published = false
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]
