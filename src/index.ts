@@ -182,7 +182,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
     if (history.visibleDigest !== undefined && !fork) {
       return existing === undefined
         ? decision
-        : { kind: 'enter', messages: decision.messages.filter(m => m.id !== existing.message.id) }
+        : { ...decision, messages: decision.messages.filter(m => m.id !== existing.message.id) }
     }
 
     const snapshot = await load(agent, signal)
@@ -194,7 +194,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
       if (existing !== undefined && existing.digest === digest) return decision
       if (digest === history.visibleDigest && existing === undefined) return decision
       const replacement = snapshot.length > 0 ? rulesUpdateMessage(snapshot) : rulesRemovedMessage()
-      return { kind: 'enter', messages: appendOrReplace(decision.messages, existing?.message.id, replacement) }
+      return { ...decision, messages: appendOrReplace(decision.messages, existing?.message.id, replacement) }
     }
 
     // No visible snapshot: first publication, or restore one compacted away.
@@ -202,7 +202,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
       if (!history.published) {
         return existing === undefined
           ? decision
-          : { kind: 'enter', messages: decision.messages.filter(m => m.id !== existing.message.id) }
+          : { ...decision, messages: decision.messages.filter(m => m.id !== existing.message.id) }
       }
       // Rules existed earlier in this log but the files now read empty and the
       // snapshot is no longer visible; do not resurrect stale content.
@@ -210,7 +210,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
     }
     if (existing !== undefined && existing.digest === digest) return decision
     const message = history.published ? rulesUpdateMessage(snapshot) : rulesFirstMessage(snapshot)
-    return { kind: 'enter', messages: appendOrReplace(decision.messages, existing?.message.id, message) }
+    return { ...decision, messages: appendOrReplace(decision.messages, existing?.message.id, message) }
   })
 }
 

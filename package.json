@@ -1,6 +1,6 @@
 {
   "name": "dsh-agents-rules",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "AGENTS rules adapter for DeepSeek Harness: .agents/rules and .claude/rules (project + global, deduplicated) injected into the system prompt, frozen per session.",
   "type": "module",
   "author": "young1lin",
@@ -11,10 +11,10 @@
   "homepage": "https://github.com/young1lin/dsh-agents-rules#readme",
   "bugs": "https://github.com/young1lin/dsh-agents-rules/issues",
   "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
+  "types": "lib/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
     "./package.json": "./package.json"
@@ -42,21 +42,21 @@
     "@deepseek-ai/schemastery": "^3.18.1"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1-rc.1",
-    "@deepseek-ai/dsh-llm": "^0.1.7-rc.2",
-    "@deepseek-ai/dsh-session": "^0.1.7-rc.2",
-    "@deepseek-ai/dsh-system-prompt": "^0.1.7-rc.2"
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-llm": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "^0.2.0-rc.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
-    "@deepseek-ai/dsh-agent": "^0.1.7-rc.2",
-    "@deepseek-ai/dsh-llm": "^0.1.7-rc.2",
-    "@deepseek-ai/dsh-session": "^0.1.7-rc.2",
-    "@deepseek-ai/dsh-fs": "^0.1.7-rc.2",
-    "@deepseek-ai/dsh-fs-local": "0.1.7-rc.2",
-    "@deepseek-ai/dsh-sandbox": "^0.1.7-rc.2",
-    "@deepseek-ai/dsh-scope": "0.1.7-rc.2",
-    "@deepseek-ai/dsh-system-prompt": "^0.1.7-rc.2",
+    "@deepseek-ai/dsh-agent": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-fs": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-fs-local": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-sandbox": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-scope": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "^0.2.0-rc.2",
     "@types/node": "^22.10.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 — 2026-10-01
+
+DSH 0.2 compatibility and package metadata fixes.
+
+- Update DSH peer dependencies and the development lockfile to `0.2.0-rc.2`; rule discovery, deduplication, and session snapshot behavior are unchanged.
+- Preserve downstream enter-decision metadata, including `startsRequestSeries`, when injecting or replacing context rules, so DSH model-message series boundaries remain intact.
+- Align the Cordis peer floor with the DSH `0.2.0-rc.2` requirement (`4.0.4`).
+- Correct both TypeScript declaration entry points to the actual build output, `lib/index.d.ts`, so package consumers can resolve the plugin types.
+- Allow the exact newly published DSH dependency versions through pnpm's release-age gate while keeping the default protection for other packages.
+
 ## 0.3.0 — 2026-09-29
 
 Claude Code compatibility and content-level deduplication.
